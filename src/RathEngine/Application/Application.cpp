@@ -3,7 +3,6 @@
 #include "RathEngine/Platform/GlfwWindow.h"
 #include "RathEngine/Renderer/Vulkan/VulkanContext.h"
 #include <chrono>
-#include <iostream>
 
 namespace Rath {
     Application::Application() {
@@ -11,14 +10,22 @@ namespace Rath {
         m_Window = std::make_unique<GlfwWindow>(WindowSpec{"RathEngine", 1280, 720});
         m_RHI    = std::make_unique<RHI::VulkanContext>();
         m_RHI->Init(m_Window.get());
-        std::cout << "[RathEngine] Application initialised.\n";
+
+        const f32 vertices[] = {
+             0.0f, -0.5f,   1.0f, 0.0f, 0.0f,
+             0.5f,  0.5f,   0.0f, 1.0f, 0.0f,
+            -0.5f,  0.5f,   0.0f, 0.0f, 1.0f
+        };
+
+        RHI::BufferDesc desc{sizeof(vertices), true, "TriangleVertexBuffer"};
+        m_TriangleBuffer = m_RHI->CreateBuffer(desc);
+        m_RHI->UploadBufferData(m_TriangleBuffer, vertices, sizeof(vertices));
     }
 
     Application::~Application() {
-        for (auto& mod : m_Modules) mod->OnShutdown();
         m_RHI->Shutdown();
+        for (auto& mod : m_Modules) mod->OnShutdown();
         JobSystem::Shutdown();
-        std::cout << "[RathEngine] Application shut down.\n";
     }
 
     void Application::RegisterModule(std::unique_ptr<IModule> mod) {
@@ -42,6 +49,7 @@ namespace Rath {
 
             if (m_RHI->BeginFrame()) {
                 m_RHI->BeginPass({ 0.01f, 0.05f, 0.2f, 1.0f });
+                m_RHI->BindVertexBuffer(m_TriangleBuffer);
                 m_RHI->Draw(3);
                 m_RHI->EndPass();
                 m_RHI->EndFrame();

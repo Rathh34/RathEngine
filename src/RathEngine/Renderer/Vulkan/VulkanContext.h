@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 #include <vk_mem_alloc.h>
 #include <vector>
+#include <functional>
 
 namespace Rath::RHI {
     class VulkanContext final : public IRHIContext {
@@ -16,11 +17,18 @@ namespace Rath::RHI {
         void               BeginPass(const ClearValue& clear) override;
         void               EndPass()                          override;
         void               Draw(u32 vertexCount)              override;
+        void               DrawIndexed(u32 indexCount)        override;
 
-        BufferHandle  CreateBuffer  (const BufferDesc&)   override;
-        void          DestroyBuffer (BufferHandle handle) override;
-        TextureHandle CreateTexture (const TextureDesc&)  override;
-        void          DestroyTexture(TextureHandle handle)override;
+        BufferHandle  CreateBuffer    (const BufferDesc&)   override;
+        void          DestroyBuffer   (BufferHandle handle) override;
+        void*         MapBuffer       (BufferHandle handle) override;
+        void          UnmapBuffer     (BufferHandle handle) override;
+        void          UploadBufferData(BufferHandle handle, const void* data, u64 size) override;
+        void          BindVertexBuffer(BufferHandle handle) override;
+        void          BindIndexBuffer (BufferHandle handle) override;
+
+        TextureHandle CreateTexture   (const TextureDesc&)  override;
+        void          DestroyTexture  (TextureHandle handle)override;
 
     private:
         void CreateInstance     (GLFWwindow* w);
@@ -34,6 +42,9 @@ namespace Rath::RHI {
         void CreateSyncObjects  ();
         void CreatePipeline     ();
         VkShaderModule LoadShaderModule(const char* path);
+        void ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function);
+
+        static constexpr u32 k_MaxFramesInFlight = 2;
 
         VkInstance       m_Instance       = VK_NULL_HANDLE;
         VkSurfaceKHR     m_Surface        = VK_NULL_HANDLE;
@@ -54,11 +65,16 @@ namespace Rath::RHI {
         VkPipelineLayout m_PipelineLayout = VK_NULL_HANDLE;
         VkPipeline       m_Pipeline       = VK_NULL_HANDLE;
 
-        VkCommandPool   m_CommandPool    = VK_NULL_HANDLE;
-        VkCommandBuffer m_CommandBuffer  = VK_NULL_HANDLE;
-        VkSemaphore     m_ImageAvailable = VK_NULL_HANDLE;
-        VkSemaphore     m_RenderFinished = VK_NULL_HANDLE;
-        VkFence         m_InFlightFence  = VK_NULL_HANDLE;
+        VkCommandPool                m_CommandPool = VK_NULL_HANDLE;
+        std::vector<VkCommandBuffer> m_CommandBuffers;
+        std::vector<VkSemaphore>     m_ImageAvailableSemaphores;
+        std::vector<VkSemaphore>     m_RenderFinishedSemaphores;
+        std::vector<VkFence>         m_InFlightFences;
+        u32                          m_CurrentFrame = 0;
+
+        VkCommandPool   m_UploadCommandPool   = VK_NULL_HANDLE;
+        VkCommandBuffer m_UploadCommandBuffer = VK_NULL_HANDLE;
+        VkFence         m_UploadFence         = VK_NULL_HANDLE;
 
         VmaAllocator m_Allocator = VK_NULL_HANDLE;
         struct InternalBuffer {

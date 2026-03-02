@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 #include <cstdio>
+#include <cstring>
 
 namespace Rath::RHI {
 
@@ -26,7 +27,7 @@ namespace {
         return false;
     }
 #endif
-} // namespace
+}
 
 void VulkanContext::Init(IWindow* window) {
     auto* gw = static_cast<GLFWwindow*>(window->GetNativeHandle());
@@ -53,8 +54,6 @@ void VulkanContext::Init(IWindow* window) {
     CreateCommandPool();
     CreateSyncObjects();
     CreatePipeline();
-
-    std::cout << "[RathEngine] Vulkan context initialised.\n";
 }
 
 void VulkanContext::Shutdown() {
@@ -71,16 +70,27 @@ void VulkanContext::Shutdown() {
     for (VkFramebuffer fb : m_Framebuffers) vkDestroyFramebuffer(m_Device, fb, nullptr);
     for (VkImageView iv : m_ImageViews)     vkDestroyImageView(m_Device, iv, nullptr);
 
-    vkDestroyRenderPass  (m_Device, m_RenderPass,     nullptr);
-    vmaDestroyAllocator  (m_Allocator);
-    vkDestroySemaphore   (m_Device, m_RenderFinished, nullptr);
-    vkDestroySemaphore   (m_Device, m_ImageAvailable, nullptr);
-    vkDestroyFence       (m_Device, m_InFlightFence,  nullptr);
-    vkDestroyCommandPool (m_Device, m_CommandPool,    nullptr);
-    vkDestroySwapchainKHR(m_Device, m_Swapchain,      nullptr);
-    vkDestroyDevice      (m_Device,                   nullptr);
-    vkDestroySurfaceKHR  (m_Instance, m_Surface,      nullptr);
-    vkDestroyInstance    (m_Instance,                 nullptr);
+    vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
+    vmaDestroyAllocator(m_Allocator);
+
+    for (size_t i = 0; i < k_MaxFramesInFlight; i++) {
+        vkDestroySemaphore(m_Device, m_ImageAvailableSemaphores[i], nullptr);
+        vkDestroyFence(m_Device, m_InFlightFences[i], nullptr);
+    }
+
+    for (size_t i = 0; i < m_RenderFinishedSemaphores.size(); i++) {
+        vkDestroySemaphore(m_Device, m_RenderFinishedSemaphores[i], nullptr);
+    }
+
+    vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
+
+    vkDestroyFence(m_Device, m_UploadFence, nullptr);
+    vkDestroyCommandPool(m_Device, m_UploadCommandPool, nullptr);
+
+    vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
+    vkDestroyDevice(m_Device, nullptr);
+    vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+    vkDestroyInstance(m_Instance, nullptr);
 }
 
 void VulkanContext::CreateInstance(GLFWwindow*) {
@@ -102,7 +112,6 @@ void VulkanContext::CreateInstance(GLFWwindow*) {
     if (IsValidationLayerAvailable()) {
         ci.enabledLayerCount   = 1;
         ci.ppEnabledLayerNames = &k_ValidationLayer;
-        std::cout << "[Vulkan] Validation layers enabled.\n";
     }
 #endif
 
@@ -300,7 +309,28 @@ void VulkanContext::CreatePipeline() {
     stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT; stages[1].module = fragMod; stages[1].pName = "main";
 
+    VkVertexInputBindingDescription bindingDescription{};
+    bindingDescription.binding = 0;
+    bindingDescription.stride = sizeof(f32) * 5;
+    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    VkVertexInputAttributeDescription attributeDescriptions[2]{};
+    attributeDescriptions[0].binding = 0;
+    attributeDescriptions[0].location = 0;
+    attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+    attributeDescriptions[0].offset = 0;
+
+    attributeDescriptions[1].binding = 0;
+    attributeDescriptions[1].location = 1;
+    attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+    attributeDescriptions[1].offset = sizeof(f32) * 2;
+
     VkPipelineVertexInputStateCreateInfo vertexInput{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+    vertexInput.vertexBindingDescriptionCount = 1;
+    vertexInput.pVertexBindingDescriptions = &bindingDescription;
+    vertexInput.vertexAttributeDescriptionCount = 2;
+    vertexInput.pVertexAttributeDescriptions = attributeDescriptions;
+
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
@@ -351,29 +381,55 @@ void VulkanContext::CreateCommandPool() {
     pi.queueFamilyIndex = m_QueueFamily;
     vkCreateCommandPool(m_Device, &pi, nullptr, &m_CommandPool);
 
+    m_CommandBuffers.resize(k_MaxFramesInFlight);
     VkCommandBufferAllocateInfo ai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-    ai.commandPool = m_CommandPool; ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; ai.commandBufferCount = 1;
-    vkAllocateCommandBuffers(m_Device, &ai, &m_CommandBuffer);
+    ai.commandPool = m_CommandPool; ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; ai.commandBufferCount = k_MaxFramesInFlight;
+    vkAllocateCommandBuffers(m_Device, &ai, m_CommandBuffers.data());
+
+    VkCommandPoolCreateInfo upi{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+    upi.flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    upi.queueFamilyIndex = m_QueueFamily;
+    vkCreateCommandPool(m_Device, &upi, nullptr, &m_UploadCommandPool);
+
+    VkCommandBufferAllocateInfo uai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+    uai.commandPool        = m_UploadCommandPool;
+    uai.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    uai.commandBufferCount = 1;
+    vkAllocateCommandBuffers(m_Device, &uai, &m_UploadCommandBuffer);
 }
 
 void VulkanContext::CreateSyncObjects() {
+    m_ImageAvailableSemaphores.resize(k_MaxFramesInFlight);
+    m_InFlightFences.resize(k_MaxFramesInFlight);
+    m_RenderFinishedSemaphores.resize(m_SwapchainImages.size());
+
     VkSemaphoreCreateInfo si{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
     VkFenceCreateInfo     fi{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
     fi.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-    vkCreateSemaphore(m_Device, &si, nullptr, &m_ImageAvailable);
-    vkCreateSemaphore(m_Device, &si, nullptr, &m_RenderFinished);
-    vkCreateFence    (m_Device, &fi, nullptr, &m_InFlightFence);
+
+    for (size_t i = 0; i < k_MaxFramesInFlight; i++) {
+        vkCreateSemaphore(m_Device, &si, nullptr, &m_ImageAvailableSemaphores[i]);
+        vkCreateFence(m_Device, &fi, nullptr, &m_InFlightFences[i]);
+    }
+
+    for (size_t i = 0; i < m_SwapchainImages.size(); i++) {
+        vkCreateSemaphore(m_Device, &si, nullptr, &m_RenderFinishedSemaphores[i]);
+    }
+
+    VkFenceCreateInfo ufi{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    vkCreateFence(m_Device, &ufi, nullptr, &m_UploadFence);
 }
 
 bool VulkanContext::BeginFrame() {
-    vkWaitForFences(m_Device, 1, &m_InFlightFence, VK_TRUE, UINT64_MAX);
-    vkResetFences  (m_Device, 1, &m_InFlightFence);
-    const VkResult r = vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX, m_ImageAvailable, VK_NULL_HANDLE, &m_ImageIndex);
+    vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
+    const VkResult r = vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &m_ImageIndex);
     if (r == VK_ERROR_OUT_OF_DATE_KHR) return false;
 
-    vkResetCommandBuffer(m_CommandBuffer, 0);
+    vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
+    vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
+
     VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    vkBeginCommandBuffer(m_CommandBuffer, &bi);
+    vkBeginCommandBuffer(m_CommandBuffers[m_CurrentFrame], &bi);
     return true;
 }
 
@@ -386,39 +442,72 @@ void VulkanContext::BeginPass(const ClearValue& clearColor) {
     rpbi.renderArea.extent = m_Extent;
     rpbi.clearValueCount   = 1;
     rpbi.pClearValues      = &cv;
-    vkCmdBeginRenderPass(m_CommandBuffer, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBeginRenderPass(m_CommandBuffers[m_CurrentFrame], &rpbi, VK_SUBPASS_CONTENTS_INLINE);
 }
 
-void VulkanContext::EndPass() { vkCmdEndRenderPass(m_CommandBuffer); }
+void VulkanContext::EndPass() { vkCmdEndRenderPass(m_CommandBuffers[m_CurrentFrame]); }
 
 void VulkanContext::Draw(u32 vertexCount) {
-    vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
+    vkCmdBindPipeline(m_CommandBuffers[m_CurrentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
     VkViewport vp{0, 0, static_cast<float>(m_Extent.width), static_cast<float>(m_Extent.height), 0.0f, 1.0f};
-    vkCmdSetViewport(m_CommandBuffer, 0, 1, &vp);
+    vkCmdSetViewport(m_CommandBuffers[m_CurrentFrame], 0, 1, &vp);
     const VkRect2D scissor{{0, 0}, m_Extent};
-    vkCmdSetScissor(m_CommandBuffer, 0, 1, &scissor);
-    vkCmdDraw(m_CommandBuffer, vertexCount, 1, 0, 0);
+    vkCmdSetScissor(m_CommandBuffers[m_CurrentFrame], 0, 1, &scissor);
+    vkCmdDraw(m_CommandBuffers[m_CurrentFrame], vertexCount, 1, 0, 0);
+}
+
+void VulkanContext::DrawIndexed(u32 indexCount) {
+    vkCmdBindPipeline(m_CommandBuffers[m_CurrentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
+    VkViewport vp{0, 0, static_cast<float>(m_Extent.width), static_cast<float>(m_Extent.height), 0.0f, 1.0f};
+    vkCmdSetViewport(m_CommandBuffers[m_CurrentFrame], 0, 1, &vp);
+    const VkRect2D scissor{{0, 0}, m_Extent};
+    vkCmdSetScissor(m_CommandBuffers[m_CurrentFrame], 0, 1, &scissor);
+    vkCmdDrawIndexed(m_CommandBuffers[m_CurrentFrame], indexCount, 1, 0, 0, 0);
 }
 
 void VulkanContext::EndFrame() {
-    vkEndCommandBuffer(m_CommandBuffer);
+    vkEndCommandBuffer(m_CommandBuffers[m_CurrentFrame]);
     constexpr VkPipelineStageFlags k_WaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
     VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
-    si.waitSemaphoreCount = 1; si.pWaitSemaphores = &m_ImageAvailable; si.pWaitDstStageMask = &k_WaitStage;
-    si.commandBufferCount = 1; si.pCommandBuffers = &m_CommandBuffer;
-    si.signalSemaphoreCount = 1; si.pSignalSemaphores = &m_RenderFinished;
-    vkQueueSubmit(m_Queue, 1, &si, m_InFlightFence);
+    si.waitSemaphoreCount = 1; si.pWaitSemaphores = &m_ImageAvailableSemaphores[m_CurrentFrame];
+    si.pWaitDstStageMask = &k_WaitStage;
+    si.commandBufferCount = 1; si.pCommandBuffers = &m_CommandBuffers[m_CurrentFrame];
+    si.signalSemaphoreCount = 1; si.pSignalSemaphores = &m_RenderFinishedSemaphores[m_ImageIndex];
+
+    vkQueueSubmit(m_Queue, 1, &si, m_InFlightFences[m_CurrentFrame]);
 
     VkPresentInfoKHR pi{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
-    pi.waitSemaphoreCount = 1; pi.pWaitSemaphores = &m_RenderFinished;
+    pi.waitSemaphoreCount = 1; pi.pWaitSemaphores = &m_RenderFinishedSemaphores[m_ImageIndex];
     pi.swapchainCount = 1; pi.pSwapchains = &m_Swapchain; pi.pImageIndices = &m_ImageIndex;
+
     vkQueuePresentKHR(m_Queue, &pi);
+
+    m_CurrentFrame = (m_CurrentFrame + 1) % k_MaxFramesInFlight;
+}
+
+void VulkanContext::ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function) {
+    VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(m_UploadCommandBuffer, &bi);
+    function(m_UploadCommandBuffer);
+    vkEndCommandBuffer(m_UploadCommandBuffer);
+
+    VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    si.commandBufferCount = 1;
+    si.pCommandBuffers    = &m_UploadCommandBuffer;
+
+    vkQueueSubmit(m_Queue, 1, &si, m_UploadFence);
+    vkWaitForFences(m_Device, 1, &m_UploadFence, VK_TRUE, UINT64_MAX);
+    vkResetFences(m_Device, 1, &m_UploadFence);
+    vkResetCommandPool(m_Device, m_UploadCommandPool, 0);
 }
 
 BufferHandle VulkanContext::CreateBuffer(const BufferDesc& desc) {
     VkBufferCreateInfo bufferInfo{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     bufferInfo.size = desc.size;
-    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
     VmaAllocationCreateInfo allocInfo{};
@@ -447,7 +536,44 @@ void VulkanContext::DestroyBuffer(BufferHandle handle) {
     ib.buffer = VK_NULL_HANDLE; ib.allocation = VK_NULL_HANDLE;
 }
 
+void* VulkanContext::MapBuffer(BufferHandle handle) {
+    void* mapped = nullptr;
+    vmaMapMemory(m_Allocator, m_Buffers[handle.index].allocation, &mapped);
+    return mapped;
+}
+
+void VulkanContext::UnmapBuffer(BufferHandle handle) {
+    vmaUnmapMemory(m_Allocator, m_Buffers[handle.index].allocation);
+}
+
+void VulkanContext::UploadBufferData(BufferHandle handle, const void* data, u64 size) {
+    BufferDesc stagingDesc{size, false, "Staging"};
+    BufferHandle staging = CreateBuffer(stagingDesc);
+
+    void* mapped = MapBuffer(staging);
+    std::memcpy(mapped, data, size);
+    UnmapBuffer(staging);
+
+    ImmediateSubmit([&](VkCommandBuffer cmd) {
+        VkBufferCopy copyRegion{};
+        copyRegion.size = size;
+        vkCmdCopyBuffer(cmd, m_Buffers[staging.index].buffer, m_Buffers[handle.index].buffer, 1, &copyRegion);
+    });
+
+    DestroyBuffer(staging);
+}
+
+void VulkanContext::BindVertexBuffer(BufferHandle handle) {
+    VkBuffer buffers[] = { m_Buffers[handle.index].buffer };
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(m_CommandBuffers[m_CurrentFrame], 0, 1, buffers, offsets);
+}
+
+void VulkanContext::BindIndexBuffer(BufferHandle handle) {
+    vkCmdBindIndexBuffer(m_CommandBuffers[m_CurrentFrame], m_Buffers[handle.index].buffer, 0, VK_INDEX_TYPE_UINT16);
+}
+
 TextureHandle VulkanContext::CreateTexture(const TextureDesc&) { return {}; }
 void VulkanContext::DestroyTexture(TextureHandle) {}
 
-} // namespace Rath::RHI
+}

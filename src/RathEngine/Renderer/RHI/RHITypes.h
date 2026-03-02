@@ -32,4 +32,22 @@ namespace Rath::RHI {
     };
 
     struct ClearValue { f32 r = 0.f, g = 0.f, b = 0.f, a = 1.f; };
+
+    enum class Format : u8 {
+        Float32_2,
+        Float32_3,
+        Float32_4
+    };
+
+    struct VertexAttribute {
+        u32    location = 0;
+        Format format   = Format::Float32_3;
+        u32    offset   = 0;
+    };
+
+    struct VertexLayout {
+        u32             stride = 0;
+        VertexAttribute attributes[8];
+        u32             attributeCount = 0;
+    };
 }
