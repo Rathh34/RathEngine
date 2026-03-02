@@ -8,21 +8,11 @@ namespace Rath::RHI {
         u32 generation = 0;
 
         bool IsValid() const { return index != UINT32_MAX; }
-
-        // Fixed: Manual C++17 operator overload instead of C++20 "= default;"
-        bool operator==(const Handle& other) const {
-            return index == other.index && generation == other.generation;
-        }
-        bool operator!=(const Handle& other) const {
-            return !(*this == other);
-        }
+        bool operator==(const Handle& o) const { return index == o.index && generation == o.generation; }
+        bool operator!=(const Handle& o) const { return !(*this == o); }
     };
 
-    struct BufferTag   {};
-    struct TextureTag  {};
-    struct PipelineTag {};
-    struct ShaderTag   {};
-
+    struct BufferTag {}; struct TextureTag {}; struct PipelineTag {}; struct ShaderTag {};
     using BufferHandle   = Handle<BufferTag>;
     using TextureHandle  = Handle<TextureTag>;
     using PipelineHandle = Handle<PipelineTag>;
@@ -35,11 +25,11 @@ namespace Rath::RHI {
     };
 
     struct TextureDesc {
-        u32         width  = 1;
-        u32         height = 1;
-        u32         mips   = 1;
+        u32         width     = 1;
+        u32         height    = 1;
+        u32         mips      = 1;
         const char* debugName = nullptr;
     };
 
-    struct ClearColor { f32 r=0, g=0, b=0, a=1; };
+    struct ClearValue { f32 r = 0.f, g = 0.f, b = 0.f, a = 1.f; };
 }

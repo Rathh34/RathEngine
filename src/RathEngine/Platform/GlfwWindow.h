@@ -1,5 +1,5 @@
 #pragma once
-#include "RathEngine/Platform/IWindow.h" // Fixed include path
+#include "RathEngine/Platform/IWindow.h"
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 

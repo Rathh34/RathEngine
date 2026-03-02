@@ -1,0 +1,2 @@
+#pragma once
+#define RATH_SHADER_DIR "@RATH_SHADER_DIR@"
