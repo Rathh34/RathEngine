@@ -3,10 +3,17 @@
   "version": "0.1.0",
   "dependencies": [
     "glfw3",
+    "vulkan",
+    "vulkan-memory-allocator",
+    "glm",
+    "stb",
+    "tinyobjloader",
     {
       "name": "imgui",
-      "features": ["glfw-binding", "vulkan-binding"]
-    },
-    "vulkan-memory-allocator"
+      "features": [
+        "glfw-binding",
+        "vulkan-binding"
+      ]
+    }
   ]
 }

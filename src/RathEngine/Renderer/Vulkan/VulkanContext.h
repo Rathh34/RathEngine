@@ -12,6 +12,8 @@ namespace Rath::RHI {
         void Init    (IWindow* window) override;
         void Shutdown()                override;
 
+        void WaitIdle() override;
+
         [[nodiscard]] bool BeginFrame()                       override;
         void               EndFrame()                         override;
         void               BeginPass(const ClearValue& clear) override;
@@ -29,6 +31,12 @@ namespace Rath::RHI {
 
         TextureHandle CreateTexture   (const TextureDesc&)  override;
         void          DestroyTexture  (TextureHandle handle)override;
+        void          BindTexture     (TextureHandle handle)override;
+
+        void          PushConstants   (const void* data, u32 size) override;
+
+        void BeginImGui();
+        void EndImGui();
 
     private:
         void CreateInstance     (GLFWwindow* w);
@@ -36,11 +44,15 @@ namespace Rath::RHI {
         void CreateLogicalDevice();
         void CreateSwapchain    (GLFWwindow* w);
         void CreateImageViews   ();
+        void CreateDepthResources();
+        VkFormat FindDepthFormat();
         void CreateRenderPass   ();
         void CreateFramebuffers ();
         void CreateCommandPool  ();
         void CreateSyncObjects  ();
+        void CreateDescriptors  ();
         void CreatePipeline     ();
+        void InitImGui          (GLFWwindow* w);
         VkShaderModule LoadShaderModule(const char* path);
         void ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function);
 
@@ -61,9 +73,15 @@ namespace Rath::RHI {
         VkExtent2D                 m_Extent{};
         u32                        m_ImageIndex = 0;
 
-        VkRenderPass     m_RenderPass     = VK_NULL_HANDLE;
-        VkPipelineLayout m_PipelineLayout = VK_NULL_HANDLE;
-        VkPipeline       m_Pipeline       = VK_NULL_HANDLE;
+        VkFormat         m_DepthFormat = VK_FORMAT_UNDEFINED;
+        VkImage          m_DepthImage = VK_NULL_HANDLE;
+        VmaAllocation    m_DepthAllocation = VK_NULL_HANDLE;
+        VkImageView      m_DepthImageView = VK_NULL_HANDLE;
+
+        VkRenderPass          m_RenderPass     = VK_NULL_HANDLE;
+        VkDescriptorSetLayout m_GlobalSetLayout= VK_NULL_HANDLE;
+        VkPipelineLayout      m_PipelineLayout = VK_NULL_HANDLE;
+        VkPipeline            m_Pipeline       = VK_NULL_HANDLE;
 
         VkCommandPool                m_CommandPool = VK_NULL_HANDLE;
         std::vector<VkCommandBuffer> m_CommandBuffers;
@@ -76,12 +94,24 @@ namespace Rath::RHI {
         VkCommandBuffer m_UploadCommandBuffer = VK_NULL_HANDLE;
         VkFence         m_UploadFence         = VK_NULL_HANDLE;
 
+        VkDescriptorPool m_ImGuiPool = VK_NULL_HANDLE;
+        VkDescriptorPool m_EnginePool = VK_NULL_HANDLE;
+
         VmaAllocator m_Allocator = VK_NULL_HANDLE;
         struct InternalBuffer {
             VkBuffer      buffer     = VK_NULL_HANDLE;
             VmaAllocation allocation = VK_NULL_HANDLE;
             u32           generation = 0;
         };
-        std::vector<InternalBuffer> m_Buffers;
+        struct InternalTexture {
+            VkImage       image      = VK_NULL_HANDLE;
+            VkImageView   view       = VK_NULL_HANDLE;
+            VkSampler     sampler    = VK_NULL_HANDLE;
+            VmaAllocation allocation = VK_NULL_HANDLE;
+            VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+            u32           generation = 0;
+        };
+        std::vector<InternalBuffer>  m_Buffers;
+        std::vector<InternalTexture> m_Textures;
     };
 }

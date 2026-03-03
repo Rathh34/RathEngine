@@ -28,16 +28,13 @@ namespace Rath::RHI {
         u32         width     = 1;
         u32         height    = 1;
         u32         mips      = 1;
+        const char* path      = nullptr;
         const char* debugName = nullptr;
     };
 
     struct ClearValue { f32 r = 0.f, g = 0.f, b = 0.f, a = 1.f; };
 
-    enum class Format : u8 {
-        Float32_2,
-        Float32_3,
-        Float32_4
-    };
+    enum class Format : u8 { Float32_2, Float32_3, Float32_4 };
 
     struct VertexAttribute {
         u32    location = 0;

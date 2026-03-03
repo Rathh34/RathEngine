@@ -11,17 +11,19 @@ find_package(glfw3 CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
+find_package(glm CONFIG REQUIRED)
+find_package(Stb REQUIRED)
+find_package(tinyobjloader CONFIG REQUIRED)
+
+# Find the tinyobjloader header directory
 
 # 2. Safely extract glslc path directly from the Vulkan package
 if(TARGET Vulkan::glslc)
-    # Modern CMake sets this target if glslc is found
     get_target_property(GLSLC_EXECUTABLE Vulkan::glslc IMPORTED_LOCATION)
 elseif(Vulkan_GLSLC_EXECUTABLE)
-    # Legacy fallback variable populated by FindVulkan.cmake
     set(GLSLC_EXECUTABLE ${Vulkan_GLSLC_EXECUTABLE})
 endif()
 
-# 3. Final safety check with a clear error message
 if(NOT GLSLC_EXECUTABLE)
     message(FATAL_ERROR "Vulkan was found, but glslc.exe could not be located. Please ensure the Vulkan SDK is installed correctly.")
 endif()
@@ -69,6 +71,8 @@ add_dependencies(RathEngine RathShaders)
 target_include_directories(RathEngine PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
         "${CMAKE_CURRENT_BINARY_DIR}/generated"
+        "${CMAKE_TOOLCHAIN_FILE}/../../installed/${VCPKG_TARGET_TRIPLET}/include"
+        "${TINYOBJ_INCLUDE_DIR}"
 )
 
 target_link_libraries(RathEngine PRIVATE
@@ -76,6 +80,8 @@ target_link_libraries(RathEngine PRIVATE
         Vulkan::Vulkan
         imgui::imgui
         GPUOpen::VulkanMemoryAllocator
+        glm::glm
+        tinyobjloader::tinyobjloader
 )
 
 target_compile_options(RathEngine PRIVATE

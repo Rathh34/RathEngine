@@ -11,6 +11,8 @@ namespace Rath::RHI {
         virtual void Init    (IWindow* window) = 0;
         virtual void Shutdown()                = 0;
 
+        virtual void WaitIdle() = 0;
+
         [[nodiscard]] virtual bool BeginFrame() = 0;
         virtual void EndFrame()                 = 0;
 
@@ -29,5 +31,8 @@ namespace Rath::RHI {
 
         virtual TextureHandle CreateTexture   (const TextureDesc&)  = 0;
         virtual void          DestroyTexture  (TextureHandle handle)= 0;
+        virtual void          BindTexture     (TextureHandle handle)= 0;
+
+        virtual void          PushConstants   (const void* data, u32 size) = 0;
     };
 }
