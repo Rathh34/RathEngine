@@ -12,6 +12,9 @@ namespace Rath {
         void SetRotation(const glm::vec3& rotation) { m_Rotation = rotation; UpdateView(); }
         void SetAspect(f32 aspect) { m_Aspect = aspect; UpdateProjection(); }
 
+        // New Update method for movement
+        void Update(f32 dt);
+
         [[nodiscard]] const glm::vec3& GetPosition() const { return m_Position; }
         [[nodiscard]] const glm::mat4& GetViewProjection() const { return m_ViewProjection; }
 
@@ -19,9 +22,9 @@ namespace Rath {
         void UpdateView();
         void UpdateProjection();
 
-        glm::vec3 m_Position{0.0f, 0.0f, 2.0f}; 
+        glm::vec3 m_Position{0.0f, 0.0f, 2.0f};
         glm::vec3 m_Rotation{0.0f, 0.0f, 0.0f};
-        
+
         f32 m_Fov;
         f32 m_Aspect;
         f32 m_NearClip;
@@ -30,5 +33,9 @@ namespace Rath {
         glm::mat4 m_View{1.0f};
         glm::mat4 m_Projection{1.0f};
         glm::mat4 m_ViewProjection{1.0f};
+
+        // Mouse tracking state
+        glm::vec2 m_LastMousePosition{0.0f, 0.0f};
+        bool m_FirstMouse{true};
     };
 }

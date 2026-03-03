@@ -7,6 +7,7 @@
 #include "RathEngine/Scene/Transform.h"
 #include <memory>
 #include <vector>
+#include <string_view>
 
 namespace Rath {
     class IWindow;
@@ -14,6 +15,7 @@ namespace Rath {
     class IModule {
     public:
         virtual ~IModule() = default;
+        virtual std::string_view GetName() const = 0;
         virtual void OnInit(class Application& app) = 0;
         virtual void OnUpdate(f32 dt) = 0;
         virtual void OnShutdown() = 0;
@@ -33,15 +35,16 @@ namespace Rath {
         }
 
     private:
-        std::unique_ptr<IWindow>          m_Window;
+        std::unique_ptr<IWindow> m_Window;
         std::unique_ptr<RHI::IRHIContext> m_RHI;
         std::vector<std::unique_ptr<IModule>> m_Modules;
-        bool                              m_Running = true;
-        LinearAllocator                   m_FrameAllocator{1024 * 1024}; // 1MB per frame
 
-        Mesh                    m_Mesh;
-        std::vector<Transform>  m_Entities;
+        bool m_Running{true};
+        LinearAllocator m_FrameAllocator{1024 * 1024};
+
+        Mesh m_Mesh;
+        std::vector<Transform> m_Entities;
         std::unique_ptr<Camera> m_Camera;
-        RHI::TextureHandle      m_Texture;
+        RHI::TextureHandle m_Texture;
     };
 }

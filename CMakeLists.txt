@@ -65,7 +65,18 @@ configure_file(
 
 # 6. Executable setup
 file(GLOB_RECURSE RATHENGINE_SOURCES "src/*.cpp")
-add_executable(RathEngine ${RATHENGINE_SOURCES})
+add_executable(RathEngine ${RATHENGINE_SOURCES}
+        src/RathEngine/Core/Input.cpp
+        src/RathEngine/Core/Input.h
+        src/RathEngine/Core/KeyCodes.h
+        src/RathEngine/Renderer/Vulkan/VulkanSwapchain.cpp
+        src/RathEngine/Renderer/Vulkan/VulkanSwapchain.h
+        src/RathEngine/Renderer/Vulkan/VulkanPipeline.cpp
+        src/RathEngine/Renderer/Vulkan/VulkanPipeline.h
+        src/RathEngine/Renderer/Vulkan/VulkanDescriptors.cpp
+        src/RathEngine/Renderer/Vulkan/VulkanDescriptors.h
+        src/RathEngine/Renderer/Vulkan/VulkanResourceManager.cpp
+        src/RathEngine/Renderer/Vulkan/VulkanResourceManager.h)
 add_dependencies(RathEngine RathShaders)
 
 target_include_directories(RathEngine PRIVATE
