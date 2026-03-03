@@ -19,7 +19,6 @@ namespace Rath {
 
         void LoadFromData(RHI::IRHIContext* rhi, const std::vector<Vertex>& vertices, const std::vector<u16>& indices);
         
-        // Loads a 3D model from disk using tinyobjloader
         bool LoadFromObj(RHI::IRHIContext* rhi, const std::string& filepath);
 
         void Destroy(RHI::IRHIContext* rhi);
